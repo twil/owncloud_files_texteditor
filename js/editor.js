@@ -222,6 +222,22 @@ var Files_Texteditor = {
 	},
 
 	/**
+	 * Handles on preview button click
+	 */
+	_onHTMLPreviewTrigger: function(file) {
+		if(!file.previewurl) {
+			return;
+		}
+		$('#editor_container').toggleClass('hasHTMLPreview');
+		if($('#editor_container').hasClass('hasHTMLPreview')) {
+			$('#preview').html('<iframe src="' + file.previewurl + '" sandbox="allow-forms allow-scripts allow-top-navigation"></iframe>');
+		}
+		else {
+			$('#preview').html('');
+		}
+	},
+
+	/**
 	 * Setup on page load
 	 */
 	initialize: function(container) {
@@ -331,11 +347,17 @@ var Files_Texteditor = {
 			+'<small class="unsaved-star" style="display: none">*</small>'
 			+'<small class="saving-message">'
 			+'</small>'
+			+'<button id="editor_preview" class="btn-preview hidden">Preview HTML</button>'
 			+'<button id="editor_close" class="icon-close svg"></button>';
 		var controlBar = $('<div id="editor_controls"></div>').html(html);
 		$('#editor_wrap').before(controlBar);
+
+		if(file.mime == 'text/html' && file.previewurl) {
+			$('#editor_preview').removeClass('hidden');
+		}
+
 		this.setFilenameMaxLength();
-		this.bindControlBar();
+		this.bindControlBar(file);
 
 	},
 
@@ -363,9 +385,22 @@ var Files_Texteditor = {
 	/**
 	 * Binds the control events on the control bar
 	 */
-	bindControlBar: function() {
+	bindControlBar: function(file) {
 		var self = this;
+
+		var htmlPreviewHandler = function(file) {
+			return function() {
+				return self._onHTMLPreviewTrigger(file);
+			};
+		};
+
 		$('#editor_close').on('click', _.bind(this._onCloseTrigger, this));
+		$('#editor_preview').on('click', _.bind(htmlPreviewHandler(file), this));
+
+		if(file.mime == 'text/html' && file.previewurl) {
+			$('#editor_preview').click();
+		}
+
 		$(window).resize(OCA.Files_Texteditor.setFilenameMaxLength);
 		if(!$('html').hasClass('ie8')) {
 			window.onpopstate = function (e) {
@@ -494,6 +529,9 @@ var Files_Texteditor = {
 			// Call success callback
 			OCA.Files_Texteditor.file.writeable = data.writeable;
 			OCA.Files_Texteditor.file.mime = data.mime;
+			if(data.mime == 'text/html') {
+				OCA.Files_Texteditor.file.previewurl = data.previewurl;
+			}
 			OCA.Files_Texteditor.file.mtime = data.mtime;
 			success(OCA.Files_Texteditor.file, data.filecontents);
 		}).fail(function(jqXHR) {
