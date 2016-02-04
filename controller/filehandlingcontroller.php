@@ -191,12 +191,12 @@ class FileHandlingController extends Controller{
 	}
 
 	protected function getHTMLPreviewLink($path, $owner) {
-		//$users = Share::getUsersSharingFile($path, $owner, false, false);
 
 		$info = $this->view->getFileInfo($path);
 		$fileType = $info->getType();
 		$fileId = $info->getId();
 
+		// prefer share token
 		$shares = Share::getItemShared($fileType, (string)$fileId,
 				                       Share::FORMAT_NONE, null, true);
 		$share = null;
@@ -204,10 +204,6 @@ class FileHandlingController extends Controller{
 			if($s['uid_owner'] == $owner) {
 				$share = $s;
 			}
-		}
-
-		if($share === null) {
-			return '';
 		}
 
 		//
@@ -223,28 +219,29 @@ class FileHandlingController extends Controller{
 			return '';
 		}
 
-		$token = $share['token'];
-
-		// get expiration date
-		$expires = $share['expiration'];
-		if(!$expires) {
-			$expires = '2020-12-31 23:59:59';
-		}
-		$expires = strtotime($expires);
-
 		// Get path with an owner info
 		$secretPath = "/" . $owner . "/files" . $path;
 
+		// preset params
+		$token = bin2hex(openssl_random_pseudo_bytes(32));
+		$expires = '2020-12-31 23:59:59';
+		$fileSaltKey = 'filesalt_tmp_' . $secretPath;
+
+		if($share !== null) {
+			$token = $share['token'];
+			if($share['expiration']) {
+				$expires = $share['expiration'];
+			}
+			$fileSaltKey = 'filesalt_' . $secretPath;
+		}
+
+		$expires = strtotime($expires);
+
 		// set token
-		$fileSaltKey = 'filesalt_' . $secretPath;
 		$this->cache->set($fileSaltKey, $token, 5 * 60); // expire in 5 minutes
 
 		$secretLink = HtmlPreviewMiddleware::getSecretLink($secretPath,
 				$expires, $token, $secretSalt, $htmlPreviewPrefix);
-		
-		// TMP:
-		//$this->logger->error("BBBBBBBBBBBBB: " . $secretLink,
-		//				     ['app' => 'files_texteditor']);
 
 		return $secretLink;
 	}
