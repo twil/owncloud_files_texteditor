@@ -27,7 +27,6 @@ use OC\Files\View;
 use OC\HintException;
 use OC\Memcache\Memcached;
 
-use OCP\Share;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
@@ -36,7 +35,8 @@ use OCP\ILogger;
 use OCP\IRequest;
 use OCP\IConfig;
 
-use OCA\Files_Sharing\Middleware\HtmlPreviewMiddleware;
+use OCA\Files_Sharing\SecretLink;
+
 
 class FileHandlingController extends Controller{
 
@@ -110,9 +110,10 @@ class FileHandlingController extends Controller{
 
 					$owner = $this->view->getOwner($path);
 
-					// TMP:
-					$this->logger->error("AAAAAAAAA: " . $path . "; " . $owner,
-							             ['app' => 'files_texteditor']);
+					$secretLink = '';
+					if($mime == 'text/html') {
+						$secretLink = SecretLink::getHTMLPreviewLink($this->config, $path, $owner);
+					}
 
 					return new DataResponse(
 						[
@@ -120,7 +121,7 @@ class FileHandlingController extends Controller{
 							'writeable' => $writable,
 							'mime' => $mime,
 							'mtime' => $mTime,
-							'previewurl' => $mime == 'text/html' ? $this->getHTMLPreviewLink($path, $owner) : '',
+							'previewurl' => $secretLink,
 						],
 						Http::STATUS_OK
 					);
@@ -188,62 +189,6 @@ class FileHandlingController extends Controller{
 			$this->logger->error('No file mtime supplied', ['app' => 'files_texteditor']);
 			return new DataResponse(['message' => $this->l->t('File mtime not supplied')], Http::STATUS_BAD_REQUEST);
 		}
-	}
-
-	protected function getHTMLPreviewLink($path, $owner) {
-
-		$info = $this->view->getFileInfo($path);
-		$fileType = $info->getType();
-		$fileId = $info->getId();
-
-		// prefer share token
-		$shares = Share::getItemShared($fileType, (string)$fileId,
-				                       Share::FORMAT_NONE, null, true);
-		$share = null;
-		foreach($shares as $id => $s) {
-			if($s['uid_owner'] == $owner) {
-				$share = $s;
-			}
-		}
-
-		//
-		// HACK: same stuff as in OCA\Files_Sharing\Middleware\HtmlPreviewMiddleware
-		//
-
-		// Check if salt is set
-		$secretSalt = $this->config->getSystemValue('html_preview_salt');
-		$htmlPreviewPrefix = $this->config->getSystemValue('html_preview_prefix');
-		$htmlPreviewDomain = $this->config->getSystemValue('html_preview_domain');
-		if(!$secretSalt || !$htmlPreviewPrefix) {
-			$this->log_error('html_preview_salt or html_preview_prefix not set');
-			return '';
-		}
-
-		// Get path with an owner info
-		$secretPath = "/" . $owner . "/files" . $path;
-
-		// preset params
-		$token = bin2hex(openssl_random_pseudo_bytes(32));
-		$expires = '2020-12-31 23:59:59';
-		$fileSaltKey = 'filesalt_tmp_' . $secretPath;
-
-		if($share !== null) {
-			$token = $share['token'];
-			if($share['expiration']) {
-				$expires = $share['expiration'];
-			}
-			$fileSaltKey = 'filesalt_' . $secretPath;
-		}
-
-		$expires = strtotime($expires);
-
-		// set token
-		$this->cache->set($fileSaltKey, $token, 5 * 60); // expire in 5 minutes
-
-		$secretLink = HtmlPreviewMiddleware::getSecretLink($secretPath,
-				$expires, $token, $secretSalt, $htmlPreviewPrefix);
-
-		return $secretLink;
 	}
 
 	protected function log_error($message) {

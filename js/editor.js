@@ -230,7 +230,8 @@ var Files_Texteditor = {
 		}
 		$('#editor_container').toggleClass('hasHTMLPreview');
 		if($('#editor_container').hasClass('hasHTMLPreview')) {
-			$('#preview').html('<iframe src="' + file.previewurl + '" sandbox="allow-forms allow-scripts allow-top-navigation"></iframe>');
+			$('#preview').html('<iframe src="' + file.previewurl + '"></iframe>');
+			// sandbox="allow-forms allow-scripts allow-top-navigation"
 		}
 		else {
 			$('#preview').html('');
